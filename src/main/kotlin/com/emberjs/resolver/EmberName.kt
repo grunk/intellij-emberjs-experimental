@@ -3,6 +3,7 @@ package com.emberjs.resolver
 import com.emberjs.EmberFileType
 import com.emberjs.utils.parentEmberModule
 import com.emberjs.utils.parents
+import com.emberjs.utils.podModulePrefix
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore.isAncestor
 import com.intellij.openapi.vfs.VirtualFile
@@ -138,7 +139,7 @@ data class EmberName(val type: String, val path: String, val filePath: String = 
             val v2AddonFolder = root.findChild("dist")
             val dummyAppUiFolder = testsFolder?.findFileByRelativePath("dummy/app/ui")
 
-            return fromPod(appFolder, file) ?: fromPod(addonFolder, file) ?: fromPodTest(unitTestsFolder, file)
+            return fromPod(appFolder, file, root.podModulePrefix) ?: fromPod(addonFolder, file) ?: fromPodTest(unitTestsFolder, file)
             ?: fromPodTest(integrationTestsFolder, file) ?: fromClassic(appFolder, file) ?: fromClassic(uiFolder, file)
             ?: fromClassic(v2srcFolder, file)
             ?: fromClassic(addonFolder, file) ?: fromClassic(dummyAppFolder, file) ?: fromClassic(dummyAppUiFolder, file)
@@ -287,26 +288,28 @@ data class EmberName(val type: String, val path: String, val filePath: String = 
             return EmberName("acceptance-test", name, file.path, file)
         }
 
-        fun fromPod(appFolder: VirtualFile?, file: VirtualFile): EmberName? {
+        /**
+         * @param podPrefix folder holding the pods inside [appFolder] (see [podModulePrefix]), stripped from names
+         */
+        fun fromPod(appFolder: VirtualFile?, file: VirtualFile, podPrefix: String? = null): EmberName? {
             appFolder ?: return null
 
             if (!isAncestor(appFolder, file, true))
                 return null
 
+            val podPath = file.parents.takeWhile { it != appFolder }
+                    .map { it.name }
+                    .reversed()
+                    .joinToString("/")
+                    .let { if (podPrefix != null) it.removePrefix("$podPrefix/") else it }
+
             if (file.nameWithoutExtension.removeSuffix(".module") == "styles") {
-                return file.parents.takeWhile { it != appFolder }
-                        .map { it.name }
-                        .reversed()
-                        .joinToString("/")
-                        .let { EmberName("styles", it, file.path, file) }
+                return EmberName("styles", podPath, file.path, file)
             }
 
             return EmberFileType.FILE_NAMES[file.name]?.let { type ->
 
-                file.parents.takeWhile { it != appFolder }
-                        .map { it.name }
-                        .reversed()
-                        .joinToString("/")
+                podPath
                         .let {
                             when (type) {
                                 EmberFileType.COMPONENT -> it.removePrefix("components/")

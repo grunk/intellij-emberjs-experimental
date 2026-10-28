@@ -3,8 +3,10 @@ package com.emberjs.resolver
 import com.emberjs.EmberTestFixtures.APTIBLE
 import com.emberjs.EmberTestFixtures.CRATES_IO
 import com.emberjs.EmberTestFixtures.EXAMPLE
+import com.emberjs.EmberTestFixtures.PODS_PREFIX
 import com.emberjs.utils.find
 import com.emberjs.utils.parentEmberModule
+import com.emberjs.utils.parsePodModulePrefix
 import com.emberjs.utils.use
 import com.intellij.openapi.vfs.VirtualFile
 import org.assertj.core.api.Assertions.assertThat
@@ -136,6 +138,25 @@ class EmberNameTest {
             "tests/acceptance/databases/create-test.js" to "acceptance-test:databases/create",
             "tests/helpers/start-app.js" to null
     ))
+
+    @Test fun testPodModulePrefix() = doTest(PODS_PREFIX, mapOf(
+            "app/pods/components/octane/bm-state-navigator/component.js" to "component:octane/bm-state-navigator",
+            "app/pods/components/octane/bm-state-navigator/template.hbs" to "template:components/octane/bm-state-navigator",
+            "app/pods/candidate/route.js" to "route:candidate",
+            "app/pods/candidate/template.hbs" to "template:candidate",
+            "app/components/classic-button/component.js" to "component:classic-button"
+    ))
+
+    @Test fun testParsePodModulePrefix() {
+        assertThat(parsePodModulePrefix("podModulePrefix: 'my-app/pods',")).isEqualTo("pods")
+        assertThat(parsePodModulePrefix("podModulePrefix: \"my-app/features/pods\"")).isEqualTo("features/pods")
+        assertThat(parsePodModulePrefix("podModulePrefix: AppPackage.name + '/pods',")).isEqualTo("pods")
+        assertThat(parsePodModulePrefix("podModulePrefix: `${'$'}{pkg.name}/pods`,")).isEqualTo("pods")
+        assertThat(parsePodModulePrefix("ENV.podModulePrefix = 'my-app/pods';")).isEqualTo("pods")
+        assertThat(parsePodModulePrefix("podModulePrefix: 'my-app',")).isNull()
+        assertThat(parsePodModulePrefix("// podModulePrefix: 'my-app/pods',")).isNull()
+        assertThat(parsePodModulePrefix("modulePrefix: 'my-app',")).isNull()
+    }
 
     private fun doTest(root: VirtualFile, tests: Map<String, String?>) {
         SoftAssertions().use {

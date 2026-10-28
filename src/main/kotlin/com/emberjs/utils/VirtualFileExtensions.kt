@@ -26,11 +26,13 @@ val VirtualFile.parents: Iterable<VirtualFile>
 val addonCache = ConcurrentHashMap<String, Boolean>()
 val inRepoCache = ConcurrentHashMap<String, List<String>>()
 val emberCache = ConcurrentHashMap<String, Boolean>()
+val podPrefixCache = ConcurrentHashMap<String, Pair<Long, String?>>()
 
 fun clearVirtualCache() {
     addonCache.clear()
     inRepoCache.clear()
     emberCache.clear()
+    podPrefixCache.clear()
 }
 
 val VirtualFile.inRepoAddonPaths: List<String>
@@ -68,6 +70,41 @@ val VirtualFile.inRepoAddonPaths: List<String>
         } catch (var3: Exception) {
             return out
         }
+    }
+
+private val POD_MODULE_PREFIX = Regex("""(?m)^[^/\n]*?\bpodModulePrefix\s*[:=]\s*([^,;\n]+)""")
+private val STRING_LITERAL = Regex("""['"`]([^'"`]*)['"`]""")
+private val TEMPLATE_EXPRESSION = Regex("""\$\{[^}]*}""")
+
+/**
+ * Extracts the pod folder, relative to `app/`, from the `podModulePrefix` declared in `config/environment.js`.
+ *
+ * The value is often computed (`AppPackage.name + '/pods'`), so only its last string literal is used and
+ * the leading module prefix is dropped: `'my-app/pods'`, `pkg.name + '/pods'` and `` `${pkg.name}/pods` ``
+ * all give `pods`. Returns null when no pod folder is declared.
+ */
+fun parsePodModulePrefix(environmentJs: String): String? {
+    val expression = POD_MODULE_PREFIX.find(environmentJs)?.groupValues?.get(1) ?: return null
+    val literal = STRING_LITERAL.findAll(expression).lastOrNull()?.groupValues?.get(1) ?: return null
+    val path = literal.replace(TEMPLATE_EXPRESSION, "")
+    val folder = if (path.startsWith("/")) path else path.substringAfter("/", "")
+    return folder.trim('/').ifEmpty { null }
+}
+
+/**
+ * Pod folder of this Ember root (see [parsePodModulePrefix]), cached until `config/environment.js` changes.
+ */
+val VirtualFile.podModulePrefix: String?
+    get() {
+        val config = findFileByRelativePath("config/environment.js") ?: return null
+        podPrefixCache[this.path]?.let { (stamp, prefix) -> if (stamp == config.modificationStamp) return prefix }
+        val prefix = try {
+            parsePodModulePrefix(String(config.contentsToByteArray()))
+        } catch (e: Exception) {
+            null
+        }
+        podPrefixCache[this.path] = config.modificationStamp to prefix
+        return prefix
     }
 
 val VirtualFile.isEmberAddonFolder: Boolean

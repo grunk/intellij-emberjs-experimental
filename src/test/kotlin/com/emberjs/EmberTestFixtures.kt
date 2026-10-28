@@ -13,6 +13,7 @@ object EmberTestFixtures {
     val EXAMPLE = fromFixture("example")
     val CRATES_IO = fromFixture("crates.io")
     val APTIBLE = fromFixture("dashboard.aptible.com")
+    val PODS_PREFIX = fromFixture("pods-prefix")
 
     private class MockVirtualDir(name: String) : MockVirtualFile(true, name)
 
