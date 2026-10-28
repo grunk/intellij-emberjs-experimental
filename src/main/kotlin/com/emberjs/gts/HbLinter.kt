@@ -4,6 +4,7 @@ import com.dmarcotte.handlebars.file.HbFileViewProvider
 import com.dmarcotte.handlebars.parsing.HbTokenTypes
 import com.dmarcotte.handlebars.psi.*
 import com.emberjs.glint.GlintTypeScriptService
+import com.emberjs.glint.getGlintDescriptor
 import com.intellij.lang.javascript.integration.JSAnnotationRangeError
 import com.emberjs.hbs.EmberReference
 import com.emberjs.utils.ifTrue
@@ -122,8 +123,12 @@ class HbLintExternalAnnotator() : ExternalAnnotator<InitialInfo, AnnotationResul
             return null
         }
         val result = AnnotationResult()
-        if (collectedInfo.file?.viewProvider is HbFileViewProvider) {
-            collectedInfo.project?.getService(GlintTypeScriptService::class.java)
+        val project = collectedInfo.project
+        val virtualFile = collectedInfo.file?.virtualFile
+        // Without Glint the service highlight reaches TypeScript config code outside a read action and logs errors.
+        val glintAvailable = project != null && getGlintDescriptor(project).isAvailable(virtualFile)
+        if (collectedInfo.file?.viewProvider is HbFileViewProvider && glintAvailable) {
+            project?.getService(GlintTypeScriptService::class.java)
                     ?.highlight(collectedInfo.file!!)
                     ?.get()
                     ?.filterIsInstance<JSAnnotationRangeError>()
